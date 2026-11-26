@@ -51,6 +51,8 @@ p{margin:0;font-size:.9rem;opacity:.75;text-align:center}
 #padR button{height:88px;min-width:80px}
 @media (max-width:600px){#padL button{min-width:56px;height:56px;padding:0 10px}#padL,#padL .row,#padR{gap:8px}#padL{left:10px}#padR{right:10px}#padR button{min-width:72px;height:76px;padding:0 8px;font-size:1rem}#bar{font-size:.72rem;gap:2px 8px;padding:4px 8px}#hud{left:104px;right:56px}#hud .nav{font-size:.72rem}}
 #toast{top:84px!important}
+#hint{bottom:calc(122px + env(safe-area-inset-bottom,0px))!important;z-index:5!important;touch-action:none;font-size:1.05rem!important;padding:12px 20px!important}
+@media (max-width:600px){#hint{bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -1144,7 +1146,7 @@ hold('gas',v=>{thr=v});hold('brk',v=>{brk=v});hold('nit',v=>{nit=v});
 document.getElementById('left').addEventListener('pointerdown',e=>{startAudio();move(-1);e.preventDefault()});
 document.getElementById('right').addEventListener('pointerdown',e=>{startAudio();move(1);e.preventDefault()});
 document.getElementById('snd').onclick=e=>{toggleSnd();e.currentTarget.blur()};
-hintEl.onclick=e=>{stationAction();e.currentTarget.blur()};
+hintEl.addEventListener('pointerdown',e=>{startAudio();stationAction();e.preventDefault()});
 document.getElementById('fsBtn').onclick=e=>{if(document.fullscreenElement)document.exitFullscreen();else if(wrap.requestFullscreen)wrap.requestFullscreen();e.currentTarget.blur()};
 document.addEventListener('fullscreenchange',resize);
 wrap.addEventListener('pointerdown',e=>{
