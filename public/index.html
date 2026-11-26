@@ -453,7 +453,7 @@ for(const z of[-12.9,12.9]){
   for(let i=0;i<45;i++){const p=new THREE.Mesh(BOX,steelM);p.scale.set(.12,.7,.12);p.position.set(0,.35,z+(z>0?.1:-.1));p.castShadow=true;p.userData.al=1;addScroll(p,-120+i*8);const bm=new THREE.Mesh(BOX,steelM);bm.scale.set(8,.28,.06);bm.position.set(0,.62,z);bm.castShadow=true;bm.userData.al=1;addScroll(bm,-120+i*8+4)}
 }
 /* ЛЭП и знаки ограничения скорости */
-const woodP=S(0x6b5640,.9),wireM=new THREE.LineBasicMaterial({color:0x222222});
+const poleM=S(0x6d7479,.6,.5,.6),woodP=S(0x6b5640,.9),wireM=new THREE.LineBasicMaterial({color:0x222222});
 for(let i=0;i<8;i++){
   const g=new THREE.Group();
   mesh(new THREE.CylinderGeometry(.14,.18,8.4,6),woodP,0,4.2,0,g);box(.15,.15,3.2,woodP,0,7.7,0,g);
@@ -480,7 +480,7 @@ for(let i=0;i<8;i++){
 const jerM=S(0xbdbdb8,.8,0,.3);
 for(let i=0;i<45;i++){const b=new THREE.Mesh(BOX,jerM);b.scale.set(8,.9,.6);b.position.set(0,.45,0);b.castShadow=true;b.receiveShadow=true;b.userData.al=1;b.userData.med=1;addScroll(b,-120+i*8+4)}
 /* фонари */
-const poleM=S(0x6d7479,.6,.5,.6),lampM=new THREE.MeshBasicMaterial({color:0xfff1c0});
+const lampM=new THREE.MeshBasicMaterial({color:0xfff1c0});
 for(let i=0;i<9;i++){
   const g=new THREE.Group();
   mesh(new THREE.CylinderGeometry(.1,.14,7,8),poleM,0,3.5,14.6,g);
