@@ -1047,8 +1047,11 @@ async function accAuth(kind){
 async function accSave(){
   if(accBusy)return;accBusy=true;accMsg='Сохраняю…';renderMenu();
   try{
+    const sc=Math.floor(dist)+bonus;
+    if(sc>hi){hi=sc;hiEl.textContent=hi}
     save();
-    await accApi('/api/save',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})});
+    const d=pack();d.score=sc;
+    await accApi('/api/save',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({save:d})});
     accMsg='Прогресс сохранён ('+new Date().toLocaleTimeString()+')';
   }catch(e){accMsg='Не удалось сохранить: '+e.message}
   accBusy=false;renderMenu();
@@ -1067,10 +1070,11 @@ function applySave(o){
   if(o.owned)for(let i=0;i<SV.owned.length;i++)SV.owned[i]=o.owned[i]?1:0;
   SV.owned[0]=1;
   SV.car=SV.owned[o.car]?o.car:0;
-  hi=Math.max(0,o.hi||0);hiEl.textContent=hi;
+  hi=Math.max(0,o.hi||0,o.score||0);hiEl.textContent=hi;
   cash=o.cash||0;stats=o.stats||newStats();if(!stats.lv)stats.lv={};
   SV.t=o.t||0;
-  newGame();applyCar(SV.car);save();
+  newGame();applyCar(SV.car);
+  bonus=Math.max(0,Math.floor(o.score||0));scEl.textContent=bonus;checkpoint();
 }
 async function accLogout(){
   try{await fetch('/api/logout',{method:'POST'})}catch(e){}
