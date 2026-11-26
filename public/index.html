@@ -14,7 +14,7 @@ body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px
 h1{margin:0;font-size:1.3rem}
 .bar{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
 .bar b{font-variant-numeric:tabular-nums}
-#wrap{position:relative;width:100%;height:calc(100vh - 230px);min-height:340px;border-radius:10px;border:2px solid var(--line);overflow:hidden;touch-action:none;background:#d6ebf7}
+#wrap{position:relative;width:100%;height:calc(100vh - 120px);min-height:340px;border-radius:10px;border:2px solid var(--line);overflow:hidden;touch-action:none;background:#d6ebf7}
 #wrap canvas{display:block;width:100%;height:100%}
 #msg{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.6);color:#fff;text-align:center}
 #msg b{font-size:2.2rem}
@@ -37,15 +37,26 @@ h1{margin:0;font-size:1.3rem}
 button{font:inherit;font-size:1.1rem;padding:14px 28px;border-radius:10px;border:2px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 p{margin:0;font-size:.9rem;opacity:.75;text-align:center}
+
+#hud{position:absolute;top:8px;left:112px;right:60px;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none;color:#fff;text-shadow:0 1px 3px #000}
+#bar{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:.85rem;background:rgba(15,30,45,.6);padding:5px 10px;border-radius:10px}
+#bar b{font-variant-numeric:tabular-nums}
+#hud .nav{padding:4px 10px;font-size:.85rem;color:#fff;background:rgba(15,30,45,.6);border:0}
+#snd{position:absolute;top:8px;right:8px;z-index:3;width:44px;height:44px;padding:0;font-size:1.2rem;line-height:1;background:rgba(15,30,45,.75);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px}
+#padL,#padR{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:3;display:flex;gap:10px;touch-action:none}
+#padL{left:14px;flex-direction:column;align-items:flex-start}#padL .row{display:flex;gap:10px}
+#padR{right:14px;flex-direction:row;align-items:flex-end}
+#padL button,#padR button{min-width:64px;height:64px;padding:0 14px;font-size:1.1rem;background:rgba(15,30,45,.6);color:#fff;border:2px solid rgba(255,255,255,.4);border-radius:14px;-webkit-user-select:none;user-select:none;touch-action:none}
+#padL button:active,#padR button:active{background:rgba(61,165,255,.7)}
+#padR button{height:88px;min-width:80px}
+@media (max-width:600px){#padL button{min-width:56px;height:56px;padding:0 10px}#padL,#padL .row,#padR{gap:8px}#padL{left:10px}#padR{right:10px}#padR button{min-width:72px;height:76px;padding:0 8px;font-size:1rem}#bar{font-size:.72rem;gap:2px 8px;padding:4px 8px}#hud{left:104px;right:56px}#hud .nav{font-size:.72rem}}
+#toast{top:84px!important}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 <h1>Гонка 3D</h1>
-<div class="bar"><span>Очки: <b id="sc">0</b></span><span>Рекорд: <b id="hi">0</b></span><span>Скорость: <b id="kmh">0</b> км/ч</span><span>Топливо: <b id="fuel">0</b> л</span><span>$<b id="cash">0</b></span><span>Курс: <b id="hdg">➡ Восток</b></span><span id="nitS" style="display:none">Нитро: <b id="nitv">100</b>%</span></div>
-<div class="nav" id="nav">🧭 Навигатор: ищу маршрут…</div>
-<div id="wrap"><div id="toast"></div><div id="fade"></div><button id="menuBtn" aria-label="Меню">☰</button><button id="fsBtn" aria-label="Во весь экран">⛶</button><button id="hint"></button><div id="menu"><div class="mh"><b>Меню</b><span id="mcash"></span><button id="mclose">✕</button></div><div class="tabs"><button id="tabCars" class="on">Машины</button><button id="tabTasks">Задания</button><button id="tabAcc">Аккаунт</button></div><div id="mbody"></div></div><div id="msg"><b id="msgT">Авария!</b><span id="msgS">Пробел или касание — вернуться на последнюю точку</span></div></div>
-<div class="pad"><button id="left" aria-label="Влево">◀</button><button id="gas" aria-label="Газ">Газ ▲</button><button id="brk" aria-label="Тормоз">Тормоз ▼</button><button id="nit" aria-label="Нитро" style="display:none">Нитро ⚡</button><button id="right" aria-label="Вправо">▶</button><button id="snd" aria-label="Звук">🔊</button></div>
+<div id="wrap"><div id="toast"></div><div id="fade"></div><button id="menuBtn" aria-label="Меню">☰</button><button id="fsBtn" aria-label="Во весь экран">⛶</button><button id="hint"></button><div id="menu"><div class="mh"><b>Меню</b><span id="mcash"></span><button id="mclose">✕</button></div><div class="tabs"><button id="tabCars" class="on">Машины</button><button id="tabTasks">Задания</button><button id="tabAcc">Аккаунт</button></div><div id="mbody"></div></div><div id="msg"><b id="msgT">Авария!</b><span id="msgS">Пробел или касание — вернуться на последнюю точку</span></div><div id="hud"><div id="bar"><span>Очки: <b id="sc">0</b></span><span>Рекорд: <b id="hi">0</b></span><span>Скорость: <b id="kmh">0</b> км/ч</span><span>Топливо: <b id="fuel">0</b> л</span><span>$<b id="cash">0</b></span><span>Курс: <b id="hdg">➡ Восток</b></span><span id="nitS" style="display:none">Нитро: <b id="nitv">100</b>%</span></div><div class="nav" id="nav">🧭 Навигатор: ищу маршрут…</div></div><div id="padL"><button id="nit" aria-label="Нитро" style="display:none">Нитро ⚡</button><div class="row"><button id="left" aria-label="Влево">◀</button><button id="right" aria-label="Вправо">▶</button></div></div><div id="padR"><button id="gas" aria-label="Газ">Газ ▲</button><button id="brk" aria-label="Тормоз">Тормоз ▼</button></div><button id="snd" aria-label="Звук">🔊</button></div>
 <p>← → или A/D — полоса. ↑/W — газ, ↓/S — тормоз. E — заезд на АЗС и выезд. ☰ — машины и задания. Shift/N — нитро (у Спорта). M — звук. Пробел — после аварии. Дорога разделена отбойником: U — разворот в разрыве отбойника.</p>
 <script>
 const wrap=document.getElementById('wrap'),msg=document.getElementById('msg');
