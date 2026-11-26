@@ -44,7 +44,7 @@ p{margin:0;font-size:.9rem;opacity:.75;text-align:center}
 <h1>Гонка 3D</h1>
 <div class="bar"><span>Очки: <b id="sc">0</b></span><span>Рекорд: <b id="hi">0</b></span><span>Скорость: <b id="kmh">0</b> км/ч</span><span>Топливо: <b id="fuel">0</b> л</span><span>$<b id="cash">0</b></span><span>Курс: <b id="hdg">➡ Восток</b></span><span id="nitS" style="display:none">Нитро: <b id="nitv">100</b>%</span></div>
 <div class="nav" id="nav">🧭 Навигатор: ищу маршрут…</div>
-<div id="wrap"><div id="toast"></div><div id="fade"></div><button id="menuBtn" aria-label="Меню">☰</button><button id="fsBtn" aria-label="Во весь экран">⛶</button><button id="hint"></button><div id="menu"><div class="mh"><b>Меню</b><span id="mcash"></span><button id="mclose">✕</button></div><div class="tabs"><button id="tabCars" class="on">Машины</button><button id="tabTasks">Задания</button></div><div id="mbody"></div></div><div id="msg"><b id="msgT">Авария!</b><span id="msgS">Пробел или касание — вернуться на последнюю точку</span></div></div>
+<div id="wrap"><div id="toast"></div><div id="fade"></div><button id="menuBtn" aria-label="Меню">☰</button><button id="fsBtn" aria-label="Во весь экран">⛶</button><button id="hint"></button><div id="menu"><div class="mh"><b>Меню</b><span id="mcash"></span><button id="mclose">✕</button></div><div class="tabs"><button id="tabCars" class="on">Машины</button><button id="tabTasks">Задания</button><button id="tabAcc">Аккаунт</button></div><div id="mbody"></div></div><div id="msg"><b id="msgT">Авария!</b><span id="msgS">Пробел или касание — вернуться на последнюю точку</span></div></div>
 <div class="pad"><button id="left" aria-label="Влево">◀</button><button id="gas" aria-label="Газ">Газ ▲</button><button id="brk" aria-label="Тормоз">Тормоз ▼</button><button id="nit" aria-label="Нитро" style="display:none">Нитро ⚡</button><button id="right" aria-label="Вправо">▶</button><button id="snd" aria-label="Звук">🔊</button></div>
 <p>← → или A/D — полоса. ↑/W — газ, ↓/S — тормоз. E — заезд на АЗС и выезд. ☰ — машины и задания. Shift/N — нитро (у Спорта). M — звук. Пробел — после аварии. Дорога разделена отбойником: U — разворот в разрыве отбойника.</p>
 <script>
@@ -816,207 +816,59 @@ let thr=0,brk=0,muted=false,nitro=1,nit=0,boost=0,nfx=0,uy=0,ut=0,uz0=0,uFlip=fa
 function checkpoint(){
   cp={dist:dist,poiIdx:poiIdx,fuel:fuel,cash:cash,bonus:bonus,kmAcc:kmAcc,legStart:legStart,stats:JSON.stringify(stats)};save();
 }
-let dbRef=null,saveBusy=false,saveQueued=false;
+let acct=null,saveBusy=false,saveQueued=false,saveTimer=0;
 function pack(){return{t:Date.now(),cash:cash,hi:hi,owned:SV.owned,car:SV.car,stats:stats}}
 function save(){
   const d=pack();
   try{localStorage.setItem(SVKEY,JSON.stringify(d));localStorage.setItem('gonki3d_hi',hi)}catch(e){}
-  cloudSave(d);
+  cloudSave();
 }
-function cloudSave(d){
-  if(!dbRef)return;
+function cloudSave(){
+  if(!acct)return;
+  clearTimeout(saveTimer);saveTimer=setTimeout(cloudFlush,1500);
+}
+function cloudFlush(){
+  if(!acct)return;
   if(saveBusy){saveQueued=true;return}
   saveBusy=true;
-  dbRef.set({v:1,json:JSON.stringify(d)}).catch(()=>{}).then(()=>{saveBusy=false;if(saveQueued){saveQueued=false;cloudSave(pack())}});
+  fetch('/api/save',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})}).catch(()=>{}).then(()=>{saveBusy=false;if(saveQueued){saveQueued=false;cloudFlush()}});
 }
-function applyCloud(o){
-  if(o.owned)for(let i=0;i<SV.owned.length;i++)SV.owned[i]=(SV.owned[i]||o.owned[i])?1:0;
-  if(SV.owned[o.car])SV.car=o.car;
-  hi=Math.max(hi,o.hi||0);hiEl.textContent=hi;
-  if(dist<30&&(o.t||0)>localT){cash=o.cash||0;if(o.stats){stats=o.stats;if(!stats.lv)stats.lv={}}}
-  applyCar(SV.car);
-  if(cp){cp.cash=cash;cp.stats=JSON.stringify(stats)}
-}
-function checkTasks(){
-  for(const t of TASKS){
-    const L=stats.lv[t.id]||0,g=t.goal(L);
-    if(t.max!==undefined&&L>=t.max)continue;
-    if(t.get(stats)>=g){const r=t.rew(L);cash+=r;stats.lv[t.id]=L+1;say('✅ Задание: '+t.name+' '+g+'<br>Награда: +$'+r,260)}
-  }
-}
-function newGame(){
-  for(const e of enemies)scene.remove(e.m);
-  enemies=[];lane=4;pz=LANES[4];prevPz=pz;speed=.21;uy=0;ut=0;uFlip=false;dist=0;spawn=40;over=false;shake=0;state='drive';invinc=0;kmAcc=0;shiftT=0;lastGear=1;
-  msg.style.display='none';resetNav();
-  fuel=CARS[SV.car].tank;checkpoint();
-}
-function respawn(){
-  for(const e of enemies)scene.remove(e.m);enemies=[];
-  for(const t of things)if(t.g)scene.remove(t.g);
-  dist=cp.dist;poiIdx=cp.poiIdx;bonus=cp.bonus;cash=cp.cash;kmAcc=cp.kmAcc;legStart=cp.legStart;stats=JSON.parse(cp.stats);
-  fuel=Math.max(cp.fuel,Math.min(8,CARS[SV.car].tank));
-  things=[];
-  for(let i=Math.max(0,poiIdx-1);i<pois.length;i++){const q=pois[i];things.push({D:q.D,build:()=>buildPoi(q),g:null,type:q.type})}
-  nextG=dist+300;nextS=dist+200;for(const D of uturns)if(D>dist-150)addUturnThings(D);
-  lane=4;pz=LANES[4];prevPz=pz;speed=.2;spawn=40;curves=[];nextCurveD=dist;uy=0;ut=0;uFlip=false;fadeEl.style.opacity=0;over=false;shake=0;state='drive';invinc=180;shiftT=0;arrT=0;lastGear=1;
-  msg.style.display='none';say('↩ Вы вернулись на последнюю точку<br>Топливо: '+Math.round(fuel)+' л · $'+Math.floor(cash),240);
-}
-function move(d){if(over||paused||state!=='drive')return;lane=Math.max(3,Math.min(5,lane+d))}
-function spawnCar(){
-  const onc=Math.random()<.4,r=Math.random();
-  const l=onc?Math.floor(Math.random()*3):3+Math.floor(Math.random()*3);
-  const type=r<.18?'truck':r<.5?'suv':'sedan';
-  const m=makeCar(type,ecol[Math.floor(Math.random()*ecol.length)]);
-  m.position.set(onc?260:150,0,LANES[l]);scene.add(m);
-  enemies.push({m:m,z:LANES[l],tz:LANES[l],l:l,onc:onc,v:onc?.1+Math.random()*.1:.06+Math.random()*.07,chg:!onc&&Math.random()<.3,tr:type==='truck',passed:false});
-  spawn=24+Math.random()*22-speed*18+(type==='truck'?6:0);
-}
-function crashNow(title){
-  over=true;shake=1.2;
-  msgT.textContent=title||'Авария!';msgS.textContent='Пробел или касание — вернуться на последнюю точку';msg.style.display='flex';
-  const sc=Math.floor(dist)+bonus;if(sc>hi){hi=sc;hiEl.textContent=hi}
-  save();
-}
-function canEnter(){
-  const tg=pois[poiIdx],C=CARS[SV.car];if(state!=='drive'||over||paused||tg.type!=='gas')return false;
-  const dr=tg.D+3-dist;return dr<120&&dr>speed*speed/(2*.0035)*1.15+8;
-}
-function canUturn(){return state==='drive'&&!over&&!paused&&uturns.some(D=>Math.abs(D-dist)<16)}
-function startUturn(){state='uturn';ut=0;uFlip=false;uz0=pz}
-function flipWorld(){
-  for(const o of scroll){const z0=o.userData.z0===undefined?o.position.z:o.userData.z0;o.userData.z0=-z0;o.position.x=-o.position.x}
-  for(const e of enemies){e.m.position.x=-e.m.position.x;e.z=-e.z;e.tz=-e.tz;e.l=5-e.l;e.onc=!e.onc;e.chg=false;e.passed=true}
-  for(const t of things)if(t.g)scene.remove(t.g);
-  things=[];pois=[];poiIdx=0;nextD=dist+350;legStart=dist;nextG=dist+300;nextS=dist+200;sinceGas=0;
-  uturns=[];nextU=dist-700+Math.random()*400;curves=[];nextCurveD=dist;
-  while(pois.length<4)genPoi();
-  pz=LANES[3];prevPz=pz;spawn=30;
-  hdg^=1;
-  let nb;do{nb=Math.floor(Math.random()*BIOMES.length)}while(BIOMES[nb].th===bgName);
-  biome=nb;const bb=BIOMES[nb];curDens=bb.dens;bTimer=5000+Math.random()*3000;
-  ground.material.color.setRGB(bb.tint[0],bb.tint[1],bb.tint[2]);leafM.color.set(bb.leaf);leaf2M.color.set(bb.leaf2);pineM.color.set(bb.pine);
-  for(const o of scroll)if(o.userData.tr!==undefined)o.userData.on=o.userData.tr<curDens;
-  const sk=Object.keys(SKIES).filter(n=>n!==skyName);setSky(sk[Math.floor(Math.random()*sk.length)]);
-  setBackdrop(bb.th,true);
-  if(sunS)sunS.visible=hdg===0&&skyName!=='overcast';
-}
-function stationAction(){
-  if(over||paused)return;
-  if(state==='drive'&&canEnter()){state='enter';stIdx=poiIdx}
-  else if(canUturn())startUturn();
-  else if(state==='fuel'){if(fuelBought>1)stats.refuels++;checkpoint();state='exit'}
-}
-function updHud(){
-  const C=CARS[SV.car];
-  fuelEl.textContent=Math.round(fuel);cashEl.textContent=Math.floor(cash);nitEl.textContent=Math.round(nitro*100);hdgEl.textContent=hdg?'⬅ Запад':'➡ Восток';
-  let h='';
-  if(!over&&!paused){
-    if(canEnter())h='⛽ Свернуть на АЗС (E)';
-    else if(canUturn())h='↩ Развернуться (U)';
-    else if(state==='fuel')h=(fuel>=C.tank-.05?'Бак полон':cash<.05?'Нет денег':'Заправка…')+' · '+Math.round(fuel)+'/'+C.tank+' л · E — уехать';
-  }
-  if(h){hintEl.textContent=h;hintEl.style.display='block'}else hintEl.style.display='none';
-}
+addEventListener('pagehide',()=>{if(acct)try{fetch('/api/save',{method:'PUT',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})})}catch(e){}});
 
-function loop(now){
-  let dt=Math.min((now-last)/16.67,3);last=now;
-  if(paused)dt=0;
-  t0+=dt;
-  stepBackdrop(dt);
-  const C=CARS[SV.car];
-  if(!over&&dt>0){
-    const s=speed*dt;
-    dist+=s;boost=0;genCurves();updateBend();updateRoadMesh();
-    if(state==='drive'){
-      const u=1-shiftT,mul=shiftT>0?(u<.4?.2:u<.7?.6:1.5):1;
-      boost=(nit&&C.nitro&&nitro>.02&&fuel>0&&!brk)?1:0;
-      if(boost)nitro=Math.max(0,nitro-.0032*dt);else nitro=Math.min(1,nitro+.0008*dt);
-      if(brk)speed-=.0065*C.brk*dt;
-      else if((thr&&fuel>0)||boost)speed+=.0032*C.acc*(1.15-.85*speed/(C.maxS*(1+.12*boost)))*mul*(1+.9*boost)*dt;
-      else if(speed>.1)speed=Math.max(.1,speed-.0004*dt);
-      if(fuel<=0)speed=Math.max(0,speed-.0012*dt);
-      pz+=(LANES[lane]-pz)*Math.min(1,.15*dt);
-    }else if(state==='enter'){
-      const dr=pois[stIdx].D+3-dist,vT=Math.sqrt(2*.0035*Math.max(0,dr))+.012;
-      speed=Math.min(speed,vT);pz+=((dr<30?18.7:LANES[5])-pz)*Math.min(1,(dr<30?.07:.08)*dt);
-      if(dr<.4){speed=0;state='fuel';fuelBought=0}
-    }else if(state==='fuel'){
-      speed=0;pz+=(18.7-pz)*Math.min(1,.1*dt);
-      const add=Math.min(.22*dt,C.tank-fuel,cash/PRICE);
-      if(add>0){fuel+=add;cash-=add*PRICE;fuelBought+=add}
-    }else if(state==='uturn'){
-      ut+=dt/110;
-      speed+=(.1-speed)*Math.min(1,.06*dt);
-      if(!uFlip)pz=uz0+(-LANES[3]-uz0)*ss3(Math.min(1,ut/.5));else pz=LANES[3];
-      if(!uFlip&&ut>=.5){flipWorld();uFlip=true}
-      uy=Math.PI*ss3(Math.min(1,ut))-(uFlip?Math.PI:0);
-      fadeEl.style.opacity=(Math.max(0,1-Math.abs(ut-.5)*7)*.85).toFixed(2);
-      if(ut>=1){uy=0;ut=0;uFlip=false;state='drive';lane=3;invinc=140;fadeEl.style.opacity=0;checkpoint();say('↩ Вы развернулись<br>Курс: '+(hdg?'на запад':'на восток')+' · впереди: '+THEMES[bgName].n,280)}
-    }else{
-      speed=Math.min(.3,speed+.003*dt);pz+=(LANES[5]-pz)*Math.min(1,.04*dt);
-      if(Math.abs(pz-LANES[5])<.35&&speed>=.24){state='drive';lane=5;invinc=150}
+/* ---------- аккаунт ---------- */
+let accMsg='',accBusy=false;
+function esc(x){return String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function accHtml(){
+  if(acct)return '<div class="card"><div class="ci"><b>'+esc(acct.username)+'</b><br><small>Прогресс сохраняется на сервере и доступен с любого устройства</small></div></div><div class="card"><button id="accOut">Выйти</button></div>';
+  return '<div class="card" style="display:block"><div class="ci"><b>Вход / регистрация</b><br><small>Войдите, чтобы сохранять деньги, машины и рекорд в облаке</small></div>'+
+    '<input id="accU" placeholder="Логин" autocomplete="username" maxlength="20" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #34434d;background:#0f1a24;color:#fff">'+
+    '<input id="accP" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #34434d;background:#0f1a24;color:#fff">'+
+    '<div style="display:flex;gap:8px;margin-top:8px"><button id="accIn">Войти</button><button id="accReg">Создать аккаунт</button></div>'+
+    '<div id="accErr" style="color:#ff8a80;margin-top:8px;font-size:.9rem">'+esc(accMsg)+'</div></div>';
+}
+async function accAuth(kind){
+  if(accBusy)return;
+  const u=document.getElementById('accU').value,pw=document.getElementById('accP').value,err=document.getElementById('accErr');
+  accBusy=true;err.textContent='';
+  try{
+    const r=await fetch('/api/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:pw})});
+    const j=await r.json();
+    if(!r.ok){err.textContent=j.error||'Ошибка';accBusy=false;return}
+    acct=j.user;
+    const sr=await fetch('/api/save');const sj=await sr.json();
+    const o=sj.save;
+    if(o&&(o.t||0)>(SV.t||0)){
+      try{localStorage.setItem(SVKEY,JSON.stringify(o));localStorage.setItem('gonki3d_hi',o.hi||0)}catch(e){}
+      location.reload();return;
     }
-    if(!boost&&speed>C.maxS)speed=Math.max(C.maxS,speed-.003*dt);
-    speed=Math.max(0,Math.min(C.maxS*1.12,speed));
-    if(state!=='fuel'){fuel-=(.0006+speed*.0032)*(boost?2.4:(thr&&state==='drive'&&fuel>0?1.5:1))*C.cons*dt;if(fuel<0)fuel=0}
-    if(fuel<C.tank*.2&&!lowWarn){lowWarn=true;say('⛽ Мало топлива! Ищите АЗС',200)}
-    if(fuel>C.tank*.3)lowWarn=false;
-    if(fuel<=0&&speed<.02&&state==='drive')crashNow('Топливо закончилось');
-    const k2=Math.round(speed*350),g2=gearRpm(k2).gear;
-    if(g2!==lastGear){if(g2>0&&lastGear>0&&shiftT<=.3){shiftT=1;shiftHit=false;shiftDir=g2>lastGear?1:-1}lastGear=g2}
-    if(shiftT>0){shiftT-=dt/34;if(shiftT<0)shiftT=0;if(!shiftHit&&1-shiftT>.4){shiftHit=true;kickT=0;kickAmp=1}}
-    stats.maxKmh=Math.max(stats.maxKmh,k2);
-    spawn-=s;if(spawn<=0)spawnCar();
-    for(const e of enemies){
-      e.m.position.x-=(speed+(e.onc?e.v:-e.v))*dt;
-      for(const w of e.m.userData.wheels)w.g.rotation.z-=e.v*dt/w.r;
-      if(e.chg&&e.m.position.x<80){e.chg=false;const nl=Math.max(3,Math.min(5,e.l+(Math.random()<.5?-1:1)));e.l=nl;e.tz=LANES[nl]}
-      e.z+=(e.tz-e.z)*.02*dt;
-      const ex=e.m.position.x;e.m.position.z=e.z+bz(ex);
-      e.m.rotation.y=e.onc?Math.PI-Math.atan(bs(ex)):-Math.atan(bs(ex))-(e.tz-e.z)*.08;
-      if(!e.passed&&ex<-4){e.passed=true;if(state==='drive'&&!e.onc)stats.over++}
-      if(state==='drive'&&invinc<=0&&Math.abs(ex)<2.2+e.m.userData.half-.35&&Math.abs(e.z-pz)<(e.tr?1.85:1.75))crashNow(e.onc?'Лобовое столкновение!':'Авария!');
-    }
-    enemies=enemies.filter(e=>{if(e.m.position.x<-90||e.m.position.x>260){scene.remove(e.m);return false}return true});
-    if(invinc>0)invinc-=dt;
-    for(const o of scroll){o.position.x-=s;if(o.position.x<-120){o.position.x+=360;if(o.userData.tr!==undefined)o.userData.on=o.userData.tr<curDens}}
-    for(const o of scroll){if(o.userData.z0===undefined)o.userData.z0=o.position.z;const ox=o.position.x;o.position.z=o.userData.z0+bz(ox);if(o.userData.al)o.rotation.y=-Math.atan(bs(ox))}
-    for(const c of clouds){c.position.x-=s*.12;if(c.position.x<-60)c.position.x+=340}
-    roadTex.offset.x=(dist/8)%1;shoulderTex.offset.x=(dist/8)%1;grassTex.offset.x=(dist/16)%1;
-    worldStep(s,dt);
-    scEl.textContent=Math.floor(dist)+bonus;
-  }else if(over){shake*=.92}
-  const kmh=Math.round(speed*350);kmEl.textContent=kmh;
-  const dz=(state==='drive'?LANES[lane]:state==='exit'?LANES[5]:state==='uturn'?pz:18.7)-pz;
-  const vz=dt>0?(pz-prevPz)/dt:0;prevPz=pz;
-  const c0=curv(dist),uSteer=state==='uturn'?-Math.min(1,Math.sin(Math.PI*Math.min(1,ut))*1.6):0,steer=Math.max(-1,Math.min(1,dz*.35+c0*500+uSteer));
-  swA+=(-steer*1.5-swA)*Math.min(1,.2*dt);sw.rotation.z=swA;
-  const k=Math.min(1,.15*dt),a=over?0:speed,sf=speed/C.maxS;
-  const acc=(speed-prevSpeed)/Math.max(dt,.01);prevSpeed=speed;
-  fpRoll+=(Math.max(-.2,Math.min(.2,-vz*.35))-dz*.01-c0*60-fpRoll)*k;
-  fpYaw+=(dz*.09-fpYaw)*k;
-  camLat+=(-vz*.8-c0*200-camLat)*k;
-  fpPitch+=(Math.max(-4,Math.min(4,acc*360))-fpPitch)*k;
-  shake*=Math.pow(.9,dt);
-  kickT+=dt;const ke=kickAmp*Math.exp(-kickT/16),ko=Math.sin(kickT*.42),ky=Math.sin(kickT*.42+.6);
-  nfx+=(boost-nfx)*Math.min(1,.1*dt);
-  const vib=(Math.sin(t0*1.9)+Math.sin(t0*3.1+1.3)*.6+Math.sin(t0*5.3+2)*.3)*(a*.012+nfx*.01);
-  const bob=Math.sin(t0*.22)*a*.012,lat=Math.sin(t0*.17+1)*a*.014;
-  const jx=(Math.random()-.5)*shake*.06,jy=(Math.random()-.5)*shake*.08;
-  camera.fov=56+sf*8+Math.abs(vz)*10+shake*2+ke*ko*1.2+nfx*5;
-  const sy=Math.sin(uy),cy2=Math.cos(uy),lx=-.38+lat+camLat+jx,tl=-.38+fpYaw*20+camLat*6;
-  camera.position.set(lx*sy,C.eye+vib+bob+jy-ke*ky*.02,pz+lx*cy2);
-  camera.lookAt(20*cy2+tl*sy,C.eye-.18+bob*.4+fpPitch*.12-shiftDir*ke*ko*.45,pz-20*sy+tl*cy2);
-  camera.rotateZ(fpRoll+lat*.5+(Math.random()-.5)*shake*.03+shiftDir*ke*Math.sin(kickT*.7)*.012);
-  cockpit.position.set(.38-(lat+camLat*.5+jx)*.7,-(vib+bob+jy)*.7+ke*ky*.012,0);
-  camera.updateProjectionMatrix();
-  updHands();
-  if(++gaugeT%2===0){drawGauges(kmh);renderMirror()}
-  updStreaks(dt,a+nfx*.3);
-  engineSound(gearRpm(kmh).rpm+(thr&&!over?250:0),thr&&!over?1:0,over||muted||paused);
-  if(++hudT%6===0)updHud();
-  renderer.render(scene,camera);
-  requestAnimationFrame(loop);
+    cloudFlush();
+  }catch(e){err.textContent='Нет связи с сервером'}
+  accBusy=false;renderMenu();
+}
+async function accLogout(){
+  try{await fetch('/api/logout',{method:'POST'})}catch(e){}
+  try{localStorage.removeItem(SVKEY);localStorage.removeItem('gonki3d_hi')}catch(e){}
+  location.reload();
 }
 
 /* ---------- меню: машины и задания ---------- */
@@ -1025,13 +877,15 @@ let tab='cars';
 function stars(v,m){const n=Math.max(1,Math.min(5,Math.round(v/m*5)));return '★'.repeat(n)+'☆'.repeat(5-n)}
 function renderMenu(){
   mcash.textContent='$'+Math.floor(cash);
-  document.getElementById('tabCars').className=tab==='cars'?'on':'';document.getElementById('tabTasks').className=tab==='tasks'?'on':'';
+  document.getElementById('tabCars').className=tab==='cars'?'on':'';document.getElementById('tabTasks').className=tab==='tasks'?'on':'';document.getElementById('tabAcc').className=tab==='acc'?'on':'';
   let h='';
   if(tab==='cars'){
     CARS.forEach((c,i)=>{
       const own=SV.owned[i],sel=SV.car===i;
       h+='<div class="card'+(sel?' sel':'')+'"><div class="sw" style="background:#'+c.col.toString(16).padStart(6,'0')+'"></div><div class="ci"><b>'+c.n+'</b> <span>'+c.d+'</span><br><small>'+Math.round(c.maxS*350)+' км/ч · разгон '+stars(c.acc,1.9)+' · тормоза '+stars(c.brk,1.6)+' · бак '+c.tank+' л · расход '+stars(c.cons,1.5)+(c.nitro?' · нитро ⚡':'')+'</small></div><button data-car="'+i+'"'+(sel||(!own&&cash<c.price)?' disabled':'')+'>'+(sel?'Выбрана':own?'Выбрать':'Купить $'+c.price)+'</button></div>';
     });
+  }else if(tab==='acc'){
+    h=accHtml();
   }else{
     TASKS.forEach(t=>{
       const L=stats.lv[t.id]||0,g=t.goal(L),p=Math.min(g,Math.floor(t.get(stats)));
@@ -1045,8 +899,13 @@ function openMenu(v){paused=v;menuEl.style.display=v?'block':'none';if(v)renderM
 document.getElementById('menuBtn').onclick=e=>{openMenu(!paused);e.currentTarget.blur()};
 document.getElementById('mclose').onclick=()=>openMenu(false);
 document.getElementById('tabCars').onclick=()=>{tab='cars';renderMenu()};
+document.getElementById('tabAcc').onclick=()=>{tab='acc';renderMenu()};
 document.getElementById('tabTasks').onclick=()=>{tab='tasks';renderMenu()};
 mbody.onclick=e=>{
+  const id=e.target.id;
+  if(id==='accIn')return accAuth('login');
+  if(id==='accReg')return accAuth('register');
+  if(id==='accOut')return accLogout();
   const b=e.target.closest('button[data-car]');if(!b)return;
   const i=+b.dataset.car;
   if(!SV.owned[i]){if(cash<CARS[i].price)return;cash-=CARS[i].price;SV.owned[i]=1;if(cp)cp.cash=cash}
@@ -1057,6 +916,7 @@ mbody.onclick=e=>{
 const KL=['arrowleft','a','ф'],KR=['arrowright','d','в'],KU=['arrowup','w','ц'],KD=['arrowdown','s','ы'];
 function toggleSnd(){muted=!muted;document.getElementById('snd').textContent=muted?'🔇':'🔊'}
 addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'){if(e.key==='Escape')openMenu(false);return}
   const k=e.key.toLowerCase();startAudio();
   if(k==='escape'){openMenu(false);return}
   if(KL.includes(k)){if(!e.repeat)move(-1);e.preventDefault()}
@@ -1068,7 +928,7 @@ addEventListener('keydown',e=>{
   else if(k==='m'||k==='ь'){toggleSnd()}
   else if(k===' '){if(over)respawn();e.preventDefault()}
 });
-addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(KU.includes(k))thr=0;if(KD.includes(k))brk=0;if(k==='shift'||k==='n'||k==='т')nit=0});
+addEventListener('keyup',e=>{if(e.target.tagName==='INPUT')return;const k=e.key.toLowerCase();if(KU.includes(k))thr=0;if(KD.includes(k))brk=0;if(k==='shift'||k==='n'||k==='т')nit=0});
 function hold(id,fn){
   const b=document.getElementById(id);
   b.addEventListener('pointerdown',e=>{startAudio();fn(1);e.preventDefault()});
@@ -1091,15 +951,15 @@ wrap.addEventListener('pointerdown',e=>{
 newGame();applyCar(SV.car);
 (async()=>{
   try{
-    if(!window.claude||!claude.use)return;
-    const r=await Promise.all([claude.use('db'),claude.use('user')]);
-    if(!r[0]||!r[1])return;
-    const id=await r[1].id();if(!id)return;
-    const ref=r[0].collection('data/users/'+id).doc('save');
-    const snap=await ref.get();
-    dbRef=ref;
-    if(snap.exists){const o=JSON.parse(snap.data().json);if(o)applyCloud(o)}
-    save();
+    const r=await fetch('/api/me');const j=await r.json();
+    if(!j.user)return;
+    acct=j.user;
+    const sr=await fetch('/api/save');const o=(await sr.json()).save;
+    if(o&&(o.t||0)>(SV.t||0)){
+      try{localStorage.setItem(SVKEY,JSON.stringify(o));localStorage.setItem('gonki3d_hi',o.hi||0)}catch(e){}
+      location.reload();return;
+    }
+    cloudFlush();
   }catch(e){}
 })();
 requestAnimationFrame(loop);
