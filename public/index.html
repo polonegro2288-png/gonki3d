@@ -827,25 +827,12 @@ let thr=0,brk=0,muted=false,nitro=1,nit=0,boost=0,nfx=0,uy=0,ut=0,uz0=0,uFlip=fa
 function checkpoint(){
   cp={dist:dist,poiIdx:poiIdx,fuel:fuel,cash:cash,bonus:bonus,kmAcc:kmAcc,legStart:legStart,stats:JSON.stringify(stats)};save();
 }
-let acct=null,saveBusy=false,saveQueued=false,saveTimer=0;
+let acct=null;
 function pack(){return{t:Date.now(),cash:cash,hi:hi,owned:SV.owned,car:SV.car,stats:stats}}
 function save(){
   const d=pack();
   try{localStorage.setItem(SVKEY,JSON.stringify(d));localStorage.setItem('gonki3d_hi',hi)}catch(e){}
-  cloudSave();
 }
-function cloudSave(){
-  if(!acct)return;
-  clearTimeout(saveTimer);saveTimer=setTimeout(cloudFlush,1500);
-}
-function cloudFlush(){
-  if(!acct)return;
-  if(saveBusy){saveQueued=true;return}
-  saveBusy=true;
-  fetch('/api/save',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})}).catch(()=>{}).then(()=>{saveBusy=false;if(saveQueued){saveQueued=false;cloudFlush()}});
-}
-addEventListener('pagehide',()=>{if(acct)try{fetch('/api/save',{method:'PUT',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})})}catch(e){}});
-
 function checkTasks(){
   for(const t of TASKS){
     const L=stats.lv[t.id]||0,g=t.goal(L);
@@ -1031,37 +1018,61 @@ function loop(now){
 /* ---------- аккаунт ---------- */
 let accMsg='',accBusy=false;
 function esc(x){return String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const INP='width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #34434d;background:#0f1a24;color:#fff';
 function accHtml(){
-  if(acct)return '<div class="card"><div class="ci"><b>'+esc(acct.username)+'</b><br><small>Прогресс сохраняется на сервере и доступен с любого устройства</small></div></div><div class="card"><button id="accOut">Выйти</button></div>';
-  return '<div class="card" style="display:block"><div class="ci"><b>Вход / регистрация</b><br><small>Войдите, чтобы сохранять деньги, машины и рекорд в облаке</small></div>'+
-    '<input id="accU" placeholder="Логин" autocomplete="username" maxlength="20" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #34434d;background:#0f1a24;color:#fff">'+
-    '<input id="accP" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #34434d;background:#0f1a24;color:#fff">'+
-    '<div style="display:flex;gap:8px;margin-top:8px"><button id="accIn">Войти</button><button id="accReg">Создать аккаунт</button></div>'+
-    '<div id="accErr" style="color:#ff8a80;margin-top:8px;font-size:.9rem">'+esc(accMsg)+'</div></div>';
+  const msg='<div style="margin-top:8px;font-size:.9rem;color:#9fb4c8">'+esc(accMsg)+'</div>';
+  if(acct)return '<div class="card" style="display:block"><div class="ci"><b>'+esc(acct.username)+'</b><br><small>Прогресс сохраняется и загружается вручную</small></div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="accSave">Сохранить прогресс</button><button id="accLoad">Загрузить прогресс</button><button id="accOut" style="background:#34434d;color:#fff">Выйти</button></div>'+msg+'</div>';
+  return '<div class="card" style="display:block"><div class="ci"><b>Вход / регистрация</b><br><small>После входа можно сохранить прогресс в облако и загрузить его на другом устройстве</small></div>'+
+    '<input id="accU" placeholder="Логин" autocomplete="username" maxlength="20" style="'+INP+'">'+
+    '<input id="accP" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password" style="'+INP+'">'+
+    '<div style="display:flex;gap:8px;margin-top:8px"><button id="accIn">Войти</button><button id="accReg">Создать аккаунт</button></div>'+msg+'</div>';
+}
+async function accApi(url,opt){
+  const r=await fetch(url,opt);let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(j.error||'Ошибка '+r.status);
+  return j;
 }
 async function accAuth(kind){
-  if(accBusy)return;
-  const u=document.getElementById('accU').value,pw=document.getElementById('accP').value,err=document.getElementById('accErr');
-  accBusy=true;err.textContent='';
+  if(accBusy)return;accBusy=true;
+  const u=document.getElementById('accU').value,pw=document.getElementById('accP').value;
   try{
-    const r=await fetch('/api/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:pw})});
-    const j=await r.json();
-    if(!r.ok){err.textContent=j.error||'Ошибка';accBusy=false;return}
-    acct=j.user;
-    const sr=await fetch('/api/save');const sj=await sr.json();
-    const o=sj.save;
-    if(o&&(o.t||0)>(SV.t||0)){
-      try{localStorage.setItem(SVKEY,JSON.stringify(o));localStorage.setItem('gonki3d_hi',o.hi||0)}catch(e){}
-      location.reload();return;
-    }
-    cloudFlush();
-  }catch(e){err.textContent='Нет связи с сервером'}
+    const j=await accApi('/api/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:pw})});
+    acct=j.user;accMsg=kind==='register'?'Аккаунт создан. Нажмите «Сохранить прогресс», чтобы записать текущий прогресс.':'Вы вошли. Нажмите «Загрузить прогресс» или «Сохранить прогресс».';
+  }catch(e){accMsg=e.message==='Failed to fetch'?'Нет связи с сервером':e.message}
   accBusy=false;renderMenu();
+}
+async function accSave(){
+  if(accBusy)return;accBusy=true;accMsg='Сохраняю…';renderMenu();
+  try{
+    save();
+    await accApi('/api/save',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({save:pack()})});
+    accMsg='Прогресс сохранён ('+new Date().toLocaleTimeString()+')';
+  }catch(e){accMsg='Не удалось сохранить: '+e.message}
+  accBusy=false;renderMenu();
+}
+async function accLoad(){
+  if(accBusy)return;accBusy=true;accMsg='Загружаю…';renderMenu();
+  try{
+    const o=(await accApi('/api/save')).save;
+    if(!o)accMsg='В облаке пока нет сохранения';
+    else if(!confirm('Заменить текущий прогресс сохранением из облака?'))accMsg='Отменено';
+    else{applySave(o);accMsg='Прогресс загружен'}
+  }catch(e){accMsg='Не удалось загрузить: '+e.message}
+  accBusy=false;renderMenu();
+}
+function applySave(o){
+  if(o.owned)for(let i=0;i<SV.owned.length;i++)SV.owned[i]=o.owned[i]?1:0;
+  SV.owned[0]=1;
+  SV.car=SV.owned[o.car]?o.car:0;
+  hi=Math.max(0,o.hi||0);hiEl.textContent=hi;
+  cash=o.cash||0;stats=o.stats||newStats();if(!stats.lv)stats.lv={};
+  SV.t=o.t||0;
+  newGame();applyCar(SV.car);save();
 }
 async function accLogout(){
   try{await fetch('/api/logout',{method:'POST'})}catch(e){}
-  try{localStorage.removeItem(SVKEY);localStorage.removeItem('gonki3d_hi')}catch(e){}
-  location.reload();
+  acct=null;accMsg='Вы вышли';renderMenu();
 }
 
 /* ---------- меню: машины и задания ---------- */
@@ -1099,6 +1110,8 @@ mbody.onclick=e=>{
   if(id==='accIn')return accAuth('login');
   if(id==='accReg')return accAuth('register');
   if(id==='accOut')return accLogout();
+  if(id==='accSave')return accSave();
+  if(id==='accLoad')return accLoad();
   const b=e.target.closest('button[data-car]');if(!b)return;
   const i=+b.dataset.car;
   if(!SV.owned[i]){if(cash<CARS[i].price)return;cash-=CARS[i].price;SV.owned[i]=1;if(cp)cp.cash=cash}
@@ -1128,8 +1141,8 @@ function hold(id,fn){
   for(const ev of['pointerup','pointerleave','pointercancel'])b.addEventListener(ev,()=>fn(0));
 }
 hold('gas',v=>{thr=v});hold('brk',v=>{brk=v});hold('nit',v=>{nit=v});
-document.getElementById('left').onclick=e=>{move(-1);e.currentTarget.blur()};
-document.getElementById('right').onclick=e=>{move(1);e.currentTarget.blur()};
+document.getElementById('left').addEventListener('pointerdown',e=>{startAudio();move(-1);e.preventDefault()});
+document.getElementById('right').addEventListener('pointerdown',e=>{startAudio();move(1);e.preventDefault()});
 document.getElementById('snd').onclick=e=>{toggleSnd();e.currentTarget.blur()};
 hintEl.onclick=e=>{stationAction();e.currentTarget.blur()};
 document.getElementById('fsBtn').onclick=e=>{if(document.fullscreenElement)document.exitFullscreen();else if(wrap.requestFullscreen)wrap.requestFullscreen();e.currentTarget.blur()};
@@ -1142,19 +1155,7 @@ wrap.addEventListener('pointerdown',e=>{
   const r=wrap.getBoundingClientRect();move(e.clientX-r.left<r.width/2?-1:1);
 });
 newGame();applyCar(SV.car);
-(async()=>{
-  try{
-    const r=await fetch('/api/me');const j=await r.json();
-    if(!j.user)return;
-    acct=j.user;
-    const sr=await fetch('/api/save');const o=(await sr.json()).save;
-    if(o&&(o.t||0)>(SV.t||0)){
-      try{localStorage.setItem(SVKEY,JSON.stringify(o));localStorage.setItem('gonki3d_hi',o.hi||0)}catch(e){}
-      location.reload();return;
-    }
-    cloudFlush();
-  }catch(e){}
-})();
+fetch('/api/me').then(r=>r.json()).then(j=>{if(j.user)acct=j.user}).catch(()=>{});
 requestAnimationFrame(loop);
 </script>
 </body>
