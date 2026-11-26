@@ -1,0 +1,9 @@
+{
+  "name": "gonki3d",
+  "version": "1.0.0",
+  "description": "3D гонка в браузере (three.js)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
